@@ -8,7 +8,7 @@ y los publica en un topic de Kafka. Simula un flujo de datos en tiempo
 real para demostraciones del pipeline de streaming.
 
 Uso:
-  python3 kafka_producer.py --broker kafka:9093 --topic taxi-trips --sleep 2
+  python3 kafka_producer.py --broker kafka:9092 --topic taxi-trips --sleep 2
 
 Dependencias:
   pip install kafka-python numpy faker
@@ -145,7 +145,7 @@ def run_producer(broker: str, topic: str, sleep_seconds: float) -> None:
     Maneja ~1% de duplicados enviando el mismo registro dos veces.
 
     Args:
-        broker: Dirección del broker de Kafka (ej: kafka:9093)
+        broker: Dirección del broker de Kafka (ej: kafka:9092)
         topic: Nombre del topic de Kafka (ej: taxi-trips)
         sleep_seconds: Segundos de pausa entre cada envío
     """

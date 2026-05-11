@@ -493,6 +493,7 @@ borough_df.write \
 # Escribir relaciones con Cypher query
 rel_query = """
 MATCH (t:Trip {vendor_id: event.VendorID, pickup_dt: event.tpep_pickup_datetime})
+
 MATCH (b:Borough {name: event.Pickup_Borough})
 MERGE (t)-[:PICKUP_IN]->(b)
 """
