@@ -1,16 +1,16 @@
 """
-Productor Kafka — Viajes de Taxi NYC (Streaming)
+Kafka Producer — NYC Taxi Trips (Streaming)
 =================================================
-Procesamiento de Datos Masivos | ITESO
+Massive Data Processing | ITESO
 
-Genera registros sintéticos de viajes de taxi NYC de forma continua
-y los publica en un topic de Kafka. Simula un flujo de datos en tiempo
-real para demostraciones del pipeline de streaming.
+Continuously generates synthetic NYC taxi trip records
+and publishes them to a Kafka topic. Simulates a real-time
+data stream for streaming pipeline demonstrations.
 
-Uso:
-  python3 kafka_producer.py --broker kafka:9092 --topic taxi-trips --sleep 2
+Usage:
+  python3 kafka_producer.py --broker kafka:9093 --topic taxi-trips --sleep 2
 
-Dependencias:
+Dependencies:
   pip install kafka-python numpy faker
 """
 
@@ -25,50 +25,50 @@ from faker import Faker
 from kafka import KafkaProducer
 
 # ─────────────────────────────────────────────
-# Inicialización de Faker
+# Faker Initialization
 # ─────────────────────────────────────────────
 fake = Faker()
 
 
 # ─────────────────────────────────────────────
-# Generador de registros de taxi
+# Taxi record generator
 # ─────────────────────────────────────────────
 def generate_single_taxi_record() -> dict:
     """
-    Genera un único registro de viaje de taxi con los 19 campos
-    del esquema NYC Taxi.
+    Generates a single taxi trip record with the 19 fields
+    from the NYC Taxi schema.
 
-    Inyecta datos sucios según las probabilidades definidas:
-    - ~2% trip_distance negativa o cero
-    - ~1% fare_amount negativa o cero
-    - ~2% PULocationID/DOLocationID nulos
-    - congestion_surcharge y airport_fee siempre None
-    - ~1% duplicados (se maneja en el bucle principal)
+    Injects dirty data according to defined probabilities:
+    - ~2% negative or zero trip_distance
+    - ~1% negative or zero fare_amount
+    - ~2% null PULocationID/DOLocationID
+    - congestion_surcharge and airport_fee always None
+    - ~1% duplicates (handled in the main loop)
 
     Returns:
-        dict con los 19 campos del esquema de taxi NYC
+        dict with the 19 fields of the NYC taxi schema
     """
-    # --- Timestamps de pickup y dropoff ---
-    # Genera un pickup aleatorio en los últimos 30 días
+    # --- Pickup and dropoff timestamps ---
+    # Generates a random pickup in the last 30 days
     pickup_dt = fake.date_time_between(start_date="-30d", end_date="now")
-    # Dropoff entre 3 y 90 minutos después del pickup
+    # Dropoff between 3 and 90 minutes after pickup
     duration_minutes = int(np.random.randint(3, 90))
     dropoff_dt = pickup_dt + __import__("datetime").timedelta(minutes=duration_minutes)
 
-    # --- Campos numéricos con numpy ---
+    # --- Numeric fields with numpy ---
     vendor_id = int(np.random.choice([1, 2]))
     passenger_count = int(np.random.randint(1, 7))
     trip_distance = float(np.round(np.random.uniform(0.5, 40.0), 2))
     ratecode_id = int(np.random.choice([1, 2, 3, 4, 5, 6]))
     store_and_fwd_flag = fake.random_element(elements=("Y", "N"))
 
-    # Ubicaciones de pickup y dropoff (1-265)
+    # Pickup and dropoff locations (1-265)
     pu_location_id = int(np.random.randint(1, 266))
     do_location_id = int(np.random.randint(1, 266))
 
     payment_type = int(np.random.choice([1, 2, 3, 4]))
 
-    # --- Montos ---
+    # --- Amounts ---
     fare_amount = float(np.round(np.random.uniform(3.0, 150.0), 2))
     extra = float(np.random.choice([0.0, 0.5, 1.0]))
     mta_tax = 0.5
@@ -81,34 +81,34 @@ def generate_single_taxi_record() -> dict:
     )
 
     # ─────────────────────────────────────────
-    # Inyección de datos sucios
+    # Dirty data injection
     # ─────────────────────────────────────────
 
-    # ~2% trip_distance negativa o cero
+    # ~2% negative or zero trip_distance
     if random.random() < 0.02:
         trip_distance = float(np.random.choice([0.0, -5.5, -10.0]))
 
-    # ~1% fare_amount negativa o cero
+    # ~1% negative or zero fare_amount
     if random.random() < 0.01:
         fare_amount = float(np.random.choice([0.0, -2.5]))
-        # Recalcular total_amount con fare sucio
+        # Recalculate total_amount with dirty fare
         total_amount = round(
             fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge, 2
         )
 
-    # ~2% PULocationID nulo
+    # ~2% null PULocationID
     if random.random() < 0.02:
         pu_location_id = None
 
-    # ~2% DOLocationID nulo
+    # ~2% null DOLocationID
     if random.random() < 0.02:
         do_location_id = None
 
-    # congestion_surcharge y airport_fee siempre None
+    # congestion_surcharge and airport_fee always None
     congestion_surcharge = None
     airport_fee = None
 
-    # --- Construir registro final ---
+    # --- Build final record ---
     record = {
         "VendorID": vendor_id,
         "tpep_pickup_datetime": str(pickup_dt),
@@ -135,92 +135,92 @@ def generate_single_taxi_record() -> dict:
 
 
 # ─────────────────────────────────────────────
-# Bucle principal del productor
+# Main producer loop
 # ─────────────────────────────────────────────
 def run_producer(broker: str, topic: str, sleep_seconds: float) -> None:
     """
-    Bucle principal del productor Kafka.
-    Crea un KafkaProducer con serialización JSON/UTF-8.
-    Ejecuta un bucle infinito: genera registro, envía a Kafka, duerme.
-    Maneja ~1% de duplicados enviando el mismo registro dos veces.
+    Main Kafka producer loop.
+    Creates a KafkaProducer with JSON/UTF-8 serialization.
+    Runs an infinite loop: generates record, sends to Kafka, sleeps.
+    Handles ~1% duplicates by sending the same record twice.
 
     Args:
-        broker: Dirección del broker de Kafka (ej: kafka:9092)
-        topic: Nombre del topic de Kafka (ej: taxi-trips)
-        sleep_seconds: Segundos de pausa entre cada envío
+        broker: Kafka broker address (e.g.: kafka:9093)
+        topic: Kafka topic name (e.g.: taxi-trips)
+        sleep_seconds: Pause seconds between each send
     """
-    # Crear productor con serialización JSON codificada en UTF-8
+    # Create producer with JSON serialization encoded in UTF-8
     producer = KafkaProducer(
         bootstrap_servers=broker,
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
     )
 
-    print(f"Conectado al broker  : {broker}")
+    print(f"Connected to broker  : {broker}")
     print(f"Topic                : {topic}")
-    print(f"Intervalo de envío   : {sleep_seconds}s")
+    print(f"Send interval        : {sleep_seconds}s")
     print("-" * 55)
 
     count = 0
     try:
         while True:
-            # Generar un registro de viaje de taxi
+            # Generate a taxi trip record
             record = generate_single_taxi_record()
 
-            # Enviar registro al topic de Kafka
+            # Send record to the Kafka topic
             producer.send(topic, value=record)
             producer.flush()
             count += 1
-            print(f"[{count}] Enviado: VendorID={record['VendorID']}, "
+            print(f"[{count}] Sent: VendorID={record['VendorID']}, "
                   f"PU={record['PULocationID']}, DO={record['DOLocationID']}, "
                   f"dist={record['trip_distance']}, fare={record['fare_amount']}")
 
-            # ~1% de probabilidad de enviar duplicado (mismo registro otra vez)
+            # ~1% probability of sending a duplicate (same record again)
             if random.random() < 0.01:
                 producer.send(topic, value=record)
                 producer.flush()
                 count += 1
-                print(f"[{count}] DUPLICADO enviado")
+                print(f"[{count}] DUPLICATE sent")
 
-            # Pausa configurable entre envíos
+            # Configurable pause between sends
             time.sleep(sleep_seconds)
 
     except KeyboardInterrupt:
-        # Cierre limpio al recibir Ctrl+C
-        print("\nInterrupción recibida. Cerrando productor...")
+        # Clean shutdown on Ctrl+C
+        print("\nInterrupt received. Closing producer...")
     finally:
         producer.close()
-        print(f"Productor cerrado. Total de registros enviados: {count}")
+        print(f"Producer closed. Total records sent: {count}")
 
 
 # ─────────────────────────────────────────────
-# CLI con argparse
+# CLI with argparse
 # ─────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
-    """Construye el parser de argumentos de línea de comandos."""
+    """Builds the command line arguments parser."""
     parser = argparse.ArgumentParser(
-        description="Productor Kafka que genera viajes de taxi NYC sintéticos en tiempo real."
+        description="Kafka Producer that generates synthetic NYC taxi trips in real-time."
     )
     parser.add_argument(
         "--broker",
         default="kafka:9093",
-        help="Dirección del broker de Kafka (default: kafka:9093).",
+        help="Kafka broker address (default: kafka:9093).",
     )
     parser.add_argument(
         "--topic",
         default="taxi-trips",
-        help="Nombre del topic de Kafka (default: taxi-trips).",
+        help="Kafka topic name (default: taxi-trips).",
     )
     parser.add_argument(
         "--sleep",
         type=float,
         default=2,
-        help="Segundos de pausa entre cada envío de mensaje (default: 2).",
+        help="Pause seconds between each message sent (default: 2).",
     )
     return parser
 
 
 def main():
-    """Punto de entrada principal del script."""
+    """Main entry point of the script."""
     parser = build_parser()
     args = parser.parse_args()
     run_producer(broker=args.broker, topic=args.topic, sleep_seconds=args.sleep)
